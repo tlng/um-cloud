@@ -1,0 +1,76 @@
+uvtool: support multiple bridges, eg: --bridge br0 --bridge br1
+
+patch it live with:
+   wget https://raw.githubusercontent.com/tlng/um-cloud/master/contrib/uvtool-multi-bridge.diff
+   patch -N -p0 -d /usr/lib/python2.7/dist-packages < uvtool-multi-bridge.diff
+
+=== modified file 'uvtool/libvirt/kvm.py'
+--- uvtool/libvirt/kvm.py	2014-04-01 11:27:14 +0000
++++ uvtool/libvirt/kvm.py	2014-09-19 18:06:20 +0000
+@@ -257,7 +257,8 @@
+ 
+ 
+ def compose_domain_xml(name, volumes, cpu=1, memory=512, unsafe_caching=False,
+-        template_path=DEFAULT_TEMPLATE, log_console_output=False, bridge=None):
++        template_path=DEFAULT_TEMPLATE, log_console_output=False,
++        bridge_list=None):
+     tree = etree.parse(template_path)
+     domain = tree.getroot()
+     assert domain.tag == 'domain'
+@@ -299,13 +300,14 @@
+                 )
+             )
+ 
+-    if bridge:
++    if bridge_list:
+         etree.strip_elements(devices, 'interface')
+-        devices.append(E.interface(
+-                         E.source(bridge=bridge),
+-                         E.model(type='virtio'),
+-                         type='bridge'),
+-                      )
++        for bridge in bridge_list:
++            devices.append(E.interface(
++                            E.source(bridge=bridge),
++                            E.model(type='virtio'),
++                            type='bridge'),
++                        )
+ 
+     if log_console_output:
+         print(
+@@ -333,7 +335,7 @@
+ 
+ def create(hostname, filters, user_data_fobj, meta_data_fobj, memory=512,
+            cpu=1, disk=2, unsafe_caching=False, template_path=DEFAULT_TEMPLATE,
+-           log_console_output=False, bridge=None, backing_image_file=None):
++           log_console_output=False, bridge_list=None, backing_image_file=None):
+     if backing_image_file is None:
+         base_volume_name = get_base_image(filters)
+     undo_volume_creation = []
+@@ -359,7 +361,7 @@
+ 
+         xml = compose_domain_xml(
+             hostname, [main_vol, ds_vol],
+-            bridge=bridge,
++            bridge_list=bridge_list,
+             cpu=cpu,
+             log_console_output=log_console_output,
+             memory=memory,
+@@ -526,7 +528,7 @@
+     create(
+         args.hostname, args.filters, user_data_fobj, meta_data_fobj,
+         backing_image_file=abs_image_backing_file,
+-        bridge=args.bridge,
++        bridge_list=args.bridge,
+         cpu=args.cpu,
+         disk=args.disk,
+         log_console_output=args.log_console_output,
+@@ -658,7 +660,7 @@
+     create_subparser.add_argument('--memory', default=512, type=int)
+     create_subparser.add_argument('--cpu', default=1, type=int)
+     create_subparser.add_argument('--disk', default=8, type=int)
+-    create_subparser.add_argument('--bridge')
++    create_subparser.add_argument('--bridge', action='append')
+     create_subparser.add_argument('--unsafe-caching', action='store_true')
+     create_subparser.add_argument(
+         '--user-data', type=argparse.FileType('rb'))
